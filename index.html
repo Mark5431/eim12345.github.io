@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Firebase Data</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/raphael/raphael.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/justgage/justgage.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        .card {
+            margin: 20px 0;
+        }
+        .gauge {
+            width: 100%;
+            height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center my-4">CPU Temperature Dashboard</h1>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Input Temperature (°C)</h5>
+                        <div id="inputTemperatureGauge" class="gauge"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Average Temperature (°C)</h5>
+                        <div id="averageTemperatureGauge" class="gauge"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Deviation from Average (%)</h5>
+                <p class="card-text"><span id="deviation">Loading...</span></p>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <canvas id="temperatureChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Your web app's Firebase configuration
+        var firebaseConfig = {
+            databaseURL: "https://eim-trial-default-rtdb.asia-southeast1.firebasedatabase.app",
+        };
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+    
+        // Reference to the temperature sensor data
+        var sensorRef0 = firebase.database().ref('Temperature/Temp1/0');
+        var sensorRef1 = firebase.database().ref('Temperature/Temp1/1');
+        var sensorRef2 = firebase.database().ref('Temperature/Temp1/2');
+    
+        // Initialize Chart.js
+        var ctx = document.getElementById('temperatureChart').getContext('2d');
+        var temperatureChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // Time labels will be added dynamically
+                datasets: [
+                    {
+                        label: 'Input Temperature',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        data: []
+                    },
+                    {
+                        label: 'Average Temperature',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        data: []
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'minute'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Initialize JustGage
+        var inputTemperatureGauge = new JustGage({
+            id: "inputTemperatureGauge",
+            value: 0,
+            min: 70,
+            max: 80,
+            title: "Input Temperature (°C)",
+            levelColors: ["#00ff00", "#ff0000"],
+            gaugeWidthScale: 0.6,
+            pointer: true,
+            pointerOptions: {
+                toplength: 8,
+                bottomlength: -20,
+                bottomwidth: 6,
+                color: '#000000'
+            },
+            customSectors: [{
+                color: "#ff0000",
+                lo: 75,
+                hi: 80
+            }, {
+                color: "#00ff00",
+                lo: 70,
+                hi: 75
+            }]
+        });
+
+        var averageTemperatureGauge = new JustGage({
+            id: "averageTemperatureGauge",
+            value: 0,
+            min: 70,
+            max: 80,
+            title: "Average Temperature (°C)",
+            levelColors: ["#00ff00", "#ff0000"],
+            gaugeWidthScale: 0.6,
+            pointer: true,
+            pointerOptions: {
+                toplength: 8,
+                bottomlength: -20,
+                bottomwidth: 6,
+                color: '#000000'
+            },
+            customSectors: [{
+                color: "#ff0000",
+                lo: 75,
+                hi: 80
+            }, {
+                color: "#00ff00",
+                lo: 70,
+                hi: 75
+            }]
+        });
+    
+        // Function to update Chart.js
+        function updateChart(chart, datasetIndex, data) {
+            if (data === null || data === undefined) return; // Skip invalid data
+            const now = new Date();
+            chart.data.labels.push(now);
+            chart.data.datasets[datasetIndex].data.push(data);
+            chart.update();
+        }
+    
+        // Listen for real-time updates
+        sensorRef0.on('value', (snapshot) => {
+            const data = snapshot.val();
+            console.log('Input Temperature:', data); // Debug
+            if (data !== null) {
+                const formattedData = parseFloat(data).toFixed(2);
+                inputTemperatureGauge.refresh(Number(formattedData));
+                updateChart(temperatureChart, 0, formattedData);
+            }
+        });
+    
+        sensorRef1.on('value', (snapshot) => {
+            const data = snapshot.val();
+            console.log('Average Temperature:', data); // Debug
+            if (data !== null) {
+                const formattedData = parseFloat(data).toFixed(2);
+                averageTemperatureGauge.refresh(Number(formattedData));
+                updateChart(temperatureChart, 1, formattedData);
+            }
+        });
+        
+        sensorRef2.on('value', (snapshot) => {
+            const data = snapshot.val();
+            console.log('Deviation from Average (%):', data); // Debug
+            if (data !== null) {
+                const formattedData = parseFloat(data).toFixed(2);
+                document.getElementById('deviation').innerText = formattedData;
+            }
+        });
+    </script>
+    
+</body>
+</html>
